@@ -34,7 +34,19 @@ const CheckoutPage = () => {
         }),
       });
 
-      const data = (await response.json()) as { url?: string; error?: string };
+      const responseText = await response.text();
+      let data: { url?: string; error?: string } = {};
+
+      try {
+        data = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        data = {
+          error:
+            responseText ||
+            "Checkout returned an invalid response. Check the Vercel function logs.",
+        };
+      }
+
       if (!response.ok || !data.url) {
         throw new Error(data.error ?? "Could not start checkout.");
       }

@@ -86,7 +86,8 @@ select
   currency,
   stripe_session_id,
   created_at
-from public.orders;
+from public.orders
+where status in ('paid', 'refunded');
 
 create view public.v_sales_this_month
 with (security_invoker = true)

@@ -44,6 +44,7 @@ const AdminHomeContent = () => {
       const { data: ordersData, error: ordersError } = await supabase
         .from("v_latest_orders")
         .select("*")
+        .in("status", ["paid", "refunded"])
         .order("created_at", { ascending: false })
         .limit(6);
 

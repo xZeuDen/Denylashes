@@ -8,11 +8,12 @@ import SimilarProducts from "../../../components/SimilarProducts";
 import { getProductBySlug, getSimilarProducts } from "../../../lib/supabase/queries";
 
 type ProductDetailsPageProps = {
-  params: { slug: string };
+  params: Promise<{ slug: string }>;
 };
 
 const ProductDetailsPage = async ({ params }: ProductDetailsPageProps) => {
-  const { data: product, images, usingMock } = await getProductBySlug(params.slug);
+  const { slug } = await params;
+  const { data: product, images, usingMock } = await getProductBySlug(slug);
 
   if (!product) {
     return (

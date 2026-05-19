@@ -57,6 +57,22 @@ const normalizeCartItems = (items: CheckoutPayload["items"]) => {
   return quantities;
 };
 
+const getErrorMessage = (error: unknown) =>
+  error instanceof Error ? error.message : "Unknown checkout error.";
+
+const cancelDraftOrder = async (
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  orderId: string
+) => {
+  await supabase
+    .from("orders")
+    .update({
+      status: "cancelled",
+      cancelled_at: new Date().toISOString(),
+    })
+    .eq("id", orderId);
+};
+
 export async function POST(request: Request) {
   if (!hasStripeEnv || !hasSupabaseAdminEnv) {
     return NextResponse.json(
@@ -81,7 +97,17 @@ export async function POST(request: Request) {
   }
 
   const productIds = Array.from(quantities.keys());
-  const supabase = createServiceRoleClient();
+  let supabase: ReturnType<typeof createServiceRoleClient>;
+
+  try {
+    supabase = createServiceRoleClient();
+  } catch (error) {
+    console.error("[checkout] Supabase admin client failed", error);
+    return NextResponse.json(
+      { error: "Supabase server connection is not configured correctly." },
+      { status: 500 }
+    );
+  }
 
   const { data: products, error: productsError } = await supabase
     .from("products")
@@ -163,7 +189,7 @@ export async function POST(request: Request) {
 
   const { error: itemsError } = await supabase.from("order_items").insert(orderItems);
   if (itemsError) {
-    await supabase.from("orders").update({ status: "cancelled" }).eq("id", order.id);
+    await cancelDraftOrder(supabase, order.id);
     return NextResponse.json(
       { error: "Could not save your order items." },
       { status: 500 }
@@ -171,59 +197,70 @@ export async function POST(request: Request) {
   }
 
   const baseUrl = getBaseUrl(request);
-  const stripe = getStripe();
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    client_reference_id: order.id,
-    customer_creation: "always",
-    billing_address_collection: "auto",
-    phone_number_collection: { enabled: true },
-    line_items: orderProducts.map(({ product, quantity }) => ({
-      quantity,
-      price_data: {
-        currency: product.currency.toLowerCase(),
-        unit_amount: product.price_cents,
-        product_data: {
-          name: product.title,
-          description: product.short_desc || undefined,
-          images: product.image_url?.startsWith("http")
-            ? [product.image_url]
-            : undefined,
-          metadata: {
-            product_id: product.id,
-            product_slug: product.slug,
+  let session: Awaited<ReturnType<ReturnType<typeof getStripe>["checkout"]["sessions"]["create"]>>;
+
+  try {
+    const stripe = getStripe();
+    session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      client_reference_id: order.id,
+      customer_creation: "always",
+      billing_address_collection: "auto",
+      phone_number_collection: { enabled: true },
+      line_items: orderProducts.map(({ product, quantity }) => ({
+        quantity,
+        price_data: {
+          currency: product.currency.toLowerCase(),
+          unit_amount: product.price_cents,
+          product_data: {
+            name: product.title,
+            description: product.short_desc || undefined,
+            images: product.image_url?.startsWith("http")
+              ? [product.image_url]
+              : undefined,
+            metadata: {
+              product_id: product.id,
+              product_slug: product.slug,
+            },
           },
         },
-      },
-    })),
-    metadata: {
-      order_id: order.id,
-    },
-    payment_intent_data: {
+      })),
       metadata: {
         order_id: order.id,
       },
-    },
-    shipping_address_collection: hasPhysicalProducts
-      ? { allowed_countries: SHIPPING_COUNTRIES }
-      : undefined,
-    shipping_options: hasPhysicalProducts
-      ? [
-          {
-            shipping_rate_data: {
-              type: "fixed_amount",
-              display_name: "Free tracked delivery",
-              fixed_amount: {
-                amount: shippingCents,
-                currency: currency.toLowerCase(),
+      payment_intent_data: {
+        metadata: {
+          order_id: order.id,
+        },
+      },
+      shipping_address_collection: hasPhysicalProducts
+        ? { allowed_countries: SHIPPING_COUNTRIES }
+        : undefined,
+      shipping_options: hasPhysicalProducts
+        ? [
+            {
+              shipping_rate_data: {
+                type: "fixed_amount",
+                display_name: "Free tracked delivery",
+                fixed_amount: {
+                  amount: shippingCents,
+                  currency: currency.toLowerCase(),
+                },
               },
             },
-          },
-        ]
-      : undefined,
-    success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${baseUrl}/checkout/cancelled`,
-  });
+          ]
+        : undefined,
+      success_url: `${baseUrl}/checkout/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/checkout/cancelled`,
+    });
+  } catch (error) {
+    console.error("[checkout] Stripe Checkout session failed", error);
+    await cancelDraftOrder(supabase, order.id);
+    return NextResponse.json(
+      { error: `Stripe Checkout error: ${getErrorMessage(error)}` },
+      { status: 500 }
+    );
+  }
 
   const { error: updateError } = await supabase
     .from("orders")
@@ -234,6 +271,8 @@ export async function POST(request: Request) {
     .eq("id", order.id);
 
   if (updateError || !session.url) {
+    console.error("[checkout] Could not save Stripe session", updateError);
+    await cancelDraftOrder(supabase, order.id);
     return NextResponse.json(
       { error: "Could not start Stripe Checkout." },
       { status: 500 }

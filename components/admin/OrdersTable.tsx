@@ -17,6 +17,9 @@ type OrderRow = {
   created_at: string;
 };
 
+const visibleOrderStatuses = ["paid", "refunded"];
+const statusOptions = ["all", ...visibleOrderStatuses];
+
 const OrdersTable = () => {
   const supabase = useMemo(() => createBrowserClient(), []);
   const { pushToast } = useAdminToast();
@@ -31,6 +34,7 @@ const OrdersTable = () => {
       const { data, error } = await supabase
         .from("v_latest_orders")
         .select("*")
+        .in("status", visibleOrderStatuses)
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -81,7 +85,7 @@ const OrdersTable = () => {
             onChange={(event) => setStatus(event.target.value)}
             className="ml-3 rounded-full border border-border bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
           >
-            {["all", "pending", "paid", "refunded", "cancelled"].map((item) => (
+            {statusOptions.map((item) => (
               <option key={item} value={item}>
                 {item}
               </option>

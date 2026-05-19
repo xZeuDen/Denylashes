@@ -2,15 +2,17 @@ import AdminShell from "../../../../components/admin/AdminShell";
 import OrderDetails from "../../../../components/admin/OrderDetails";
 
 type AdminOrderDetailsPageProps = {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 };
 
-export default function AdminOrderDetailsPage({
+export default async function AdminOrderDetailsPage({
   params,
 }: AdminOrderDetailsPageProps) {
+  const { id } = await params;
+
   return (
     <AdminShell>
-      <OrderDetails orderId={params.id} />
+      <OrderDetails orderId={id} />
     </AdminShell>
   );
 }
