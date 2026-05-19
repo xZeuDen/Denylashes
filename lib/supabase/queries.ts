@@ -40,35 +40,49 @@ export const getProductBySlug = async (
   slug: string
 ): Promise<ProductResult> => {
   unstable_noStore();
+  const normalizedSlug = decodeURIComponent(slug).trim();
+
   if (!hasSupabaseEnv) {
-    const product = getMockProducts().find((item) => item.slug === slug) ?? null;
+    const product =
+      getMockProducts().find((item) => item.slug === normalizedSlug) ?? null;
     return { data: product, images: [], usingMock: true };
   }
 
   const supabase = createServerClient();
   if (!supabase) {
-    const product = getMockProducts().find((item) => item.slug === slug) ?? null;
+    const product =
+      getMockProducts().find((item) => item.slug === normalizedSlug) ?? null;
     return { data: product, images: [], usingMock: true };
   }
 
   const { data, error } = await supabase
     .from("products")
     .select("*")
-    .eq("slug", slug)
-    .maybeSingle();
+    .eq("slug", normalizedSlug)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(1);
 
-  if (error || !data) {
+  const product = data?.[0] as Product | undefined;
+
+  if (error || !product) {
+    if (error) {
+      console.error("[products] Could not load product by slug", {
+        slug: normalizedSlug,
+        message: error.message,
+      });
+    }
     return { data: null, images: [], usingMock: false };
   }
 
   const { data: images } = await supabase
     .from("product_images")
     .select("id, product_id, url, sort_order")
-    .eq("product_id", data.id)
+    .eq("product_id", product.id)
     .order("sort_order", { ascending: true });
 
   return {
-    data: data as Product,
+    data: product,
     images: (images ?? []) as ProductImage[],
     usingMock: false,
   };

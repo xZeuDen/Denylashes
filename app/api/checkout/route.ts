@@ -158,12 +158,13 @@ export async function POST(request: Request) {
   const { data: order, error: orderError } = await supabase
     .from("orders")
     .insert({
-      status: "pending",
+      status: "cancelled",
       subtotal_cents: subtotalCents,
       shipping_cents: shippingCents,
       total_cents: totalCents,
       currency,
       source: "stripe_checkout",
+      cancelled_at: new Date().toISOString(),
     })
     .select("id")
     .single();

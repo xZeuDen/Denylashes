@@ -6,7 +6,6 @@ set
   status = 'cancelled',
   cancelled_at = coalesce(cancelled_at, now())
 where status = 'pending'
-  and stripe_session_id is null
   and paid_at is null;
 
 drop view if exists public.v_latest_orders;

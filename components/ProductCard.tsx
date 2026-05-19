@@ -16,6 +16,7 @@ type ProductCardProps = {
 const ProductCard = ({ product }: ProductCardProps) => {
   const { addItem } = useCart();
   const router = useRouter();
+  const productHref = `/products/${encodeURIComponent(product.slug)}`;
 
   const handleAddToCart = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
@@ -33,7 +34,7 @@ const ProductCard = ({ product }: ProductCardProps) => {
   return (
     <article className="group flex h-full flex-col gap-4 overflow-hidden rounded-[20px] border border-border bg-white p-5 shadow-soft transition hover:-translate-y-1 hover:border-ink/20 hover:shadow-softer">
       <Link
-        href={`/products/${product.slug}`}
+        href={productHref}
         aria-label={`View ${product.title}`}
         className="flex flex-1 flex-col gap-4"
       >
