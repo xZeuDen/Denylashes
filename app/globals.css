@@ -1,0 +1,31 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-white text-ink antialiased;
+  font-feature-settings: "kern", "liga", "clig", "calt";
+}
+
+::selection {
+  background: rgba(255, 99, 223, 0.25);
+}
+
+.wordmark {
+  font-style: italic;
+  letter-spacing: -0.02em;
+}
+
+.hero-overlay {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.05) 0%,
+    rgba(0, 0, 0, 0.35) 65%,
+    rgba(0, 0, 0, 0.45) 100%
+  );
+}
+

@@ -1,0 +1,14 @@
+<svg width="900" height="1100" viewBox="0 0 900 1100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="p2" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffe2f4"/>
+      <stop offset="55%" stop-color="#ffb7e8"/>
+      <stop offset="100%" stop-color="#ffe2f4"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1100" rx="120" fill="url(#p2)"/>
+  <rect x="170" y="200" width="560" height="620" rx="70" fill="#ffffff" opacity="0.7"/>
+  <circle cx="450" cy="520" r="170" fill="#ffffff" opacity="0.9"/>
+  <text x="450" y="820" text-anchor="middle" font-family="Montserrat, Arial, sans-serif" font-size="42" fill="#8b4d7d">Online Course</text>
+</svg>
+

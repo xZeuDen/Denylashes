@@ -1,0 +1,13 @@
+<svg width="900" height="1100" viewBox="0 0 900 1100" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="p1" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#f4e7ef"/>
+    </linearGradient>
+  </defs>
+  <rect width="900" height="1100" rx="120" fill="url(#p1)"/>
+  <rect x="190" y="140" width="520" height="760" rx="60" fill="#ffffff" stroke="#e6dbe3" stroke-width="6"/>
+  <rect x="250" y="260" width="400" height="340" rx="36" fill="#f7e9f1"/>
+  <text x="450" y="740" text-anchor="middle" font-family="Montserrat, Arial, sans-serif" font-size="44" fill="#9a748a">Angel Lashes</text>
+</svg>
+
