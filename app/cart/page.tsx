@@ -10,7 +10,7 @@ import useCart from "../../components/cart/useCart";
 import { formatEur } from "../../lib/format";
 
 const CartPage = () => {
-  const { items, removeItem, updateQty, clearCart } = useCart();
+  const { items, removeItem, updateQty, clearCart, getLineKey } = useCart();
 
   const subtotalCents = items.reduce(
     (sum, item) => sum + item.product.price_cents * item.quantity,
@@ -48,10 +48,12 @@ const CartPage = () => {
           <div className="grid gap-8 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,0.8fr)]">
             <div className="flex flex-col gap-6">
               {items.map((item) => {
+                const lineKey = getLineKey(item);
                 const isRemote = Boolean(item.product.image_url?.startsWith("http"));
+                const maxQty = item.variant?.stock_qty;
                 return (
                   <div
-                    key={item.product.id}
+                    key={lineKey}
                     className="flex flex-col gap-4 rounded-[20px] border border-border bg-white p-5 shadow-soft sm:flex-row sm:items-center"
                   >
                     <div className="relative h-28 w-28 overflow-hidden rounded-[16px] border border-border bg-[#faf7fb]">
@@ -81,17 +83,17 @@ const CartPage = () => {
                       </div>
                       <p className="text-xs text-muted">
                         {item.product.short_desc}
+                        {item.variant ? ` · Length ${item.variant.length_value}` : ""}
                       </p>
                       <div className="flex flex-wrap items-center gap-4">
                         <QuantitySelector
                           value={item.quantity}
-                          onChange={(value) =>
-                            updateQty(item.product.id, value)
-                          }
+                          onChange={(value) => updateQty(lineKey, value)}
+                          max={maxQty && maxQty > 0 ? maxQty : undefined}
                         />
                         <button
                           type="button"
-                          onClick={() => removeItem(item.product.id)}
+                          onClick={() => removeItem(lineKey)}
                           className="text-xs font-semibold uppercase tracking-[0.2em] text-muted transition hover:text-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
                         >
                           Remove

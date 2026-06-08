@@ -3,11 +3,17 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createBrowserClient } from "../../lib/supabase/client";
-import { Product } from "../../lib/types";
+import { Product, ProductVariant } from "../../lib/types";
 import { useAdminToast } from "./AdminShell";
 
 type ProductFormProps = {
   productId?: string;
+};
+
+type VariantDraft = {
+  id?: string;
+  length_value: string;
+  stock_qty: string;
 };
 
 const categoryOptions = [
@@ -48,6 +54,8 @@ const ProductForm = ({ productId }: ProductFormProps) => {
     is_active: true,
     image_url: "",
   });
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
+  const [initialVariantIds, setInitialVariantIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!productId) {
@@ -84,6 +92,34 @@ const ProductForm = ({ productId }: ProductFormProps) => {
         is_active: product.is_active,
         image_url: product.image_url ?? "",
       });
+
+      const { data: variantRows, error: variantError } = await supabase
+        .from("product_variants")
+        .select("id, length_value, stock_qty, sort_order")
+        .eq("product_id", productId)
+        .order("sort_order", { ascending: true });
+
+      if (variantError) {
+        pushToast({
+          tone: "error",
+          title: "Could not load length variants",
+          message: variantError.message,
+        });
+      } else {
+        const loaded = (variantRows ?? []) as Pick<
+          ProductVariant,
+          "id" | "length_value" | "stock_qty" | "sort_order"
+        >[];
+        setVariants(
+          loaded.map((variant) => ({
+            id: variant.id,
+            length_value: variant.length_value,
+            stock_qty: String(variant.stock_qty),
+          }))
+        );
+        setInitialVariantIds(loaded.map((variant) => variant.id));
+      }
+
       setLoading(false);
     };
 
@@ -144,6 +180,115 @@ const ProductForm = ({ productId }: ProductFormProps) => {
     setUploading(false);
   };
 
+  const addVariantRow = () => {
+    setVariants((prev) => [...prev, { length_value: "", stock_qty: "0" }]);
+  };
+
+  const updateVariantRow = (
+    index: number,
+    field: keyof VariantDraft,
+    value: string
+  ) => {
+    setVariants((prev) =>
+      prev.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [field]: value } : row
+      )
+    );
+  };
+
+  const removeVariantRow = (index: number) => {
+    setVariants((prev) => prev.filter((_, rowIndex) => rowIndex !== index));
+  };
+
+  const saveVariants = async (id: string) => {
+    const cleaned = variants
+      .map((variant, index) => ({
+        id: variant.id,
+        length_value: variant.length_value.trim(),
+        stock_qty: Number.parseInt(variant.stock_qty, 10),
+        sort_order: index,
+      }))
+      .filter((variant) => variant.length_value.length > 0);
+
+    for (const variant of cleaned) {
+      if (
+        !Number.isInteger(variant.stock_qty) ||
+        variant.stock_qty < 0
+      ) {
+        throw new Error("Each length variant needs a stock quantity of 0 or more.");
+      }
+    }
+
+    const keptIds = cleaned
+      .map((variant) => variant.id)
+      .filter((variantId): variantId is string => Boolean(variantId));
+    const removedIds = initialVariantIds.filter(
+      (variantId) => !keptIds.includes(variantId)
+    );
+
+    if (removedIds.length > 0) {
+      const { error } = await supabase
+        .from("product_variants")
+        .delete()
+        .in("id", removedIds);
+      if (error) {
+        throw new Error(error.message);
+      }
+    }
+
+    for (const variant of cleaned) {
+      if (variant.id) {
+        const { error } = await supabase
+          .from("product_variants")
+          .update({
+            length_value: variant.length_value,
+            stock_qty: variant.stock_qty,
+            sort_order: variant.sort_order,
+            is_active: true,
+          })
+          .eq("id", variant.id);
+        if (error) {
+          throw new Error(error.message);
+        }
+      } else {
+        const { error } = await supabase.from("product_variants").insert({
+          product_id: id,
+          length_value: variant.length_value,
+          stock_qty: variant.stock_qty,
+          sort_order: variant.sort_order,
+          is_active: true,
+        });
+        if (error) {
+          throw new Error(error.message);
+        }
+      }
+    }
+
+    const { data: refreshedVariants, error: refreshError } = await supabase
+      .from("product_variants")
+      .select("id, length_value, stock_qty, sort_order")
+      .eq("product_id", id)
+      .order("sort_order", { ascending: true });
+
+    if (refreshError) {
+      throw new Error(refreshError.message);
+    }
+
+    const refreshed = (refreshedVariants ?? []) as Pick<
+      ProductVariant,
+      "id" | "length_value" | "stock_qty" | "sort_order"
+    >[];
+
+    setVariants(
+      refreshed.map((variant) => ({
+        id: variant.id,
+        length_value: variant.length_value,
+        stock_qty: String(variant.stock_qty),
+      }))
+    );
+    setInitialVariantIds(refreshed.map((variant) => variant.id));
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSaving(true);
@@ -182,6 +327,18 @@ const ProductForm = ({ productId }: ProductFormProps) => {
         return;
       }
 
+      try {
+        await saveVariants(productId);
+      } catch (err) {
+        pushToast({
+          tone: "error",
+          title: "Length variants could not be saved",
+          message: err instanceof Error ? err.message : undefined,
+        });
+        setSaving(false);
+        return;
+      }
+
       if (mainImageFile) {
         try {
           await uploadMainImage(productId, mainImageFile);
@@ -213,6 +370,21 @@ const ProductForm = ({ productId }: ProductFormProps) => {
       });
       setSaving(false);
       return;
+    }
+
+    if (variants.some((variant) => variant.length_value.trim())) {
+      try {
+        await saveVariants(data.id);
+      } catch (err) {
+        pushToast({
+          tone: "error",
+          title: "Product created, but length variants failed",
+          message: err instanceof Error ? err.message : undefined,
+        });
+        router.push(`/admin/products/${data.id}`);
+        setSaving(false);
+        return;
+      }
     }
 
     if (mainImageFile) {
@@ -412,6 +584,80 @@ const ProductForm = ({ productId }: ProductFormProps) => {
             />
             Active
           </label>
+
+          {form.type === "physical" ? (
+            <div className="flex flex-col gap-4 rounded-[18px] border border-border bg-[#faf7fb] p-5">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                    Length variants
+                  </p>
+                  <p className="mt-1 text-sm text-muted">
+                    Add the lengths customers can choose. Price stays the same for
+                    every length. Stock is tracked per length.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={addVariantRow}
+                  className="rounded-full border border-border bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:-translate-y-0.5 hover:border-ink/40"
+                >
+                  Add length
+                </button>
+              </div>
+
+              {variants.length === 0 ? (
+                <p className="text-sm text-muted">
+                  No lengths yet. Add lengths like 10mm, 11mm, or 12mm with stock
+                  quantities.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {variants.map((variant, index) => (
+                    <div
+                      key={variant.id ?? `new-${index}`}
+                      className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_auto]"
+                    >
+                      <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                        Length
+                        <input
+                          type="text"
+                          value={variant.length_value}
+                          onChange={(event) =>
+                            updateVariantRow(index, "length_value", event.target.value)
+                          }
+                          placeholder="e.g. 11mm"
+                          className="rounded-[18px] border border-border bg-white px-4 py-3 text-sm text-ink shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        />
+                      </label>
+                      <label className="flex flex-col gap-2 text-xs font-semibold uppercase tracking-[0.2em] text-muted">
+                        Stock
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          value={variant.stock_qty}
+                          onChange={(event) =>
+                            updateVariantRow(index, "stock_qty", event.target.value)
+                          }
+                          className="rounded-[18px] border border-border bg-white px-4 py-3 text-sm text-ink shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        />
+                      </label>
+                      <div className="flex items-end">
+                        <button
+                          type="button"
+                          onClick={() => removeVariantRow(index)}
+                          className="rounded-full border border-border bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:-translate-y-0.5 hover:border-ink/40"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center justify-end gap-3">
             <button

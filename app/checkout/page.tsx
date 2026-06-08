@@ -9,7 +9,7 @@ import useCart from "../../components/cart/useCart";
 import { formatEur } from "../../lib/format";
 
 const CheckoutPage = () => {
-  const { items } = useCart();
+  const { items, getLineKey } = useCart();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,6 +29,7 @@ const CheckoutPage = () => {
         body: JSON.stringify({
           items: items.map((item) => ({
             productId: item.product.id,
+            variantId: item.variant?.id,
             quantity: item.quantity,
           })),
         }),
@@ -91,11 +92,13 @@ const CheckoutPage = () => {
               <ul className="space-y-3 text-sm text-muted">
                 {items.map((item) => (
                   <li
-                    key={item.product.id}
+                    key={getLineKey(item)}
                     className="flex items-start justify-between gap-4"
                   >
                     <span>
-                      {item.product.title} x {item.quantity}
+                      {item.product.title}
+                      {item.variant ? ` (${item.variant.length_value})` : ""} x{" "}
+                      {item.quantity}
                     </span>
                     <span>
                       {formatEur(item.product.price_cents * item.quantity)}

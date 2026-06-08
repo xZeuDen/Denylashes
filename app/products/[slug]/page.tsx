@@ -13,7 +13,7 @@ type ProductDetailsPageProps = {
 
 const ProductDetailsPage = async ({ params }: ProductDetailsPageProps) => {
   const { slug } = await params;
-  const { data: product, images, usingMock } = await getProductBySlug(slug);
+  const { data: product, images, variants, usingMock } = await getProductBySlug(slug);
 
   if (!product) {
     return (
@@ -61,7 +61,7 @@ const ProductDetailsPage = async ({ params }: ProductDetailsPageProps) => {
             images={images}
             title={product.title}
           />
-          <ProductPurchasePanel product={product} />
+          <ProductPurchasePanel product={product} variants={variants} />
         </section>
 
         <section className="grid gap-8 rounded-[20px] border border-border bg-white p-6 shadow-soft lg:grid-cols-3">

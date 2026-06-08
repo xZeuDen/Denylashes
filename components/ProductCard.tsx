@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { MouseEvent } from "react";
+import { hasLengthVariants } from "../lib/cart";
 import { formatEur } from "../lib/format";
 import { gradients } from "../lib/tokens";
 import { Product } from "../lib/types";
@@ -17,19 +18,32 @@ const ProductCard = ({ product }: ProductCardProps) => {
   const { addItem } = useCart();
   const router = useRouter();
   const productHref = `/products/${encodeURIComponent(product.slug)}`;
+  const requiresLengthChoice =
+    product.type === "physical" && hasLengthVariants(product.variants);
 
   const handleAddToCart = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    if (requiresLengthChoice) {
+      router.push(productHref);
+      return;
+    }
     addItem(product, 1);
   };
 
   const handleBuyNow = (event: MouseEvent<HTMLButtonElement>) => {
     event.stopPropagation();
+    if (requiresLengthChoice) {
+      router.push(productHref);
+      return;
+    }
     addItem(product, 1);
     router.push("/checkout");
   };
 
   const isRemote = Boolean(product.image_url?.startsWith("http"));
+  const allVariantsOutOfStock =
+    requiresLengthChoice &&
+    product.variants?.every((variant) => variant.stock_qty <= 0);
 
   return (
     <article className="group flex h-full flex-col gap-4 overflow-hidden rounded-[20px] border border-border bg-white p-5 shadow-soft transition hover:-translate-y-1 hover:border-ink/20 hover:shadow-softer">
@@ -68,23 +82,30 @@ const ProductCard = ({ product }: ProductCardProps) => {
             </span>
           </div>
           <p className="text-sm text-muted">{formatEur(product.price_cents)}</p>
+          {requiresLengthChoice ? (
+            <p className="text-xs text-muted">
+              {allVariantsOutOfStock ? "Out of stock" : "Choose a length on the product page"}
+            </p>
+          ) : null}
         </div>
       </Link>
       <div className="mt-auto grid grid-cols-2 gap-3">
         <button
           type="button"
           onClick={handleAddToCart}
-          className="rounded-full border border-border bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:-translate-y-0.5 hover:border-ink/40 hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          disabled={Boolean(allVariantsOutOfStock)}
+          className="rounded-full border border-border bg-white px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:-translate-y-0.5 hover:border-ink/40 hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          Add to cart
+          {requiresLengthChoice ? "Choose length" : "Add to cart"}
         </button>
         <button
           type="button"
           onClick={handleBuyNow}
-          className="rounded-full border border-transparent px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:-translate-y-0.5 hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          disabled={Boolean(allVariantsOutOfStock)}
+          className="rounded-full border border-transparent px-4 py-3 text-xs font-semibold uppercase tracking-[0.2em] text-ink transition hover:-translate-y-0.5 hover:shadow-soft focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
           style={{ backgroundImage: gradients.accent }}
         >
-          Buy now
+          {requiresLengthChoice ? "View product" : "Buy now"}
         </button>
       </div>
     </article>
@@ -92,4 +113,3 @@ const ProductCard = ({ product }: ProductCardProps) => {
 };
 
 export default ProductCard;
-

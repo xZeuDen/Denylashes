@@ -69,11 +69,38 @@ const addressToUpdate = (
   [`${prefix}_country`]: address?.country ?? null,
 });
 
+const decrementVariantStockForOrder = async (orderId: string) => {
+  const supabase = createServiceRoleClient();
+
+  const { data: items } = await supabase
+    .from("order_items")
+    .select("variant_id, qty")
+    .eq("order_id", orderId);
+
+  for (const item of items ?? []) {
+    if (!item.variant_id) continue;
+
+    const { data: variant } = await supabase
+      .from("product_variants")
+      .select("stock_qty")
+      .eq("id", item.variant_id)
+      .maybeSingle();
+
+    if (!variant) continue;
+
+    const nextStock = Math.max(0, variant.stock_qty - item.qty);
+    await supabase
+      .from("product_variants")
+      .update({ stock_qty: nextStock })
+      .eq("id", item.variant_id);
+  }
+};
+
 const updateOrderFromSession = async (
   session: CheckoutSession,
   status: "paid" | "pending" | "cancelled"
 ) => {
-  const orderId = getOrderId(session);
+  let orderId = getOrderId(session);
   const supabase = createServiceRoleClient();
   const now = new Date().toISOString();
   const customerDetails = session.customer_details;
@@ -94,8 +121,31 @@ const updateOrderFromSession = async (
     ...addressToUpdate("shipping", shippingDetails?.name, shippingDetails?.address),
   };
 
+  let shouldDecrementStock = false;
+  if (status === "paid") {
+    if (orderId) {
+      const { data: existingOrder } = await supabase
+        .from("orders")
+        .select("status")
+        .eq("id", orderId)
+        .maybeSingle();
+      shouldDecrementStock = existingOrder?.status !== "paid";
+    } else {
+      const { data: existingOrder } = await supabase
+        .from("orders")
+        .select("id, status")
+        .eq("stripe_session_id", session.id)
+        .maybeSingle();
+      orderId = existingOrder?.id ?? orderId;
+      shouldDecrementStock = existingOrder?.status !== "paid";
+    }
+  }
+
   if (orderId) {
     await supabase.from("orders").update(update).eq("id", orderId);
+    if (shouldDecrementStock) {
+      await decrementVariantStockForOrder(orderId);
+    }
     return;
   }
 
@@ -109,8 +159,20 @@ const updateOrderFromPaymentIntent = async (
   const orderId = paymentIntent.metadata?.order_id;
   if (!orderId) return;
 
+  const supabase = createServiceRoleClient();
   const now = new Date().toISOString();
-  await createServiceRoleClient()
+  let shouldDecrementStock = false;
+
+  if (status === "paid") {
+    const { data: existingOrder } = await supabase
+      .from("orders")
+      .select("status")
+      .eq("id", orderId)
+      .maybeSingle();
+    shouldDecrementStock = existingOrder?.status !== "paid";
+  }
+
+  await supabase
     .from("orders")
     .update({
       status,
@@ -119,6 +181,10 @@ const updateOrderFromPaymentIntent = async (
       cancelled_at: status === "cancelled" ? now : null,
     })
     .eq("id", orderId);
+
+  if (shouldDecrementStock) {
+    await decrementVariantStockForOrder(orderId);
+  }
 };
 
 export async function POST(request: Request) {

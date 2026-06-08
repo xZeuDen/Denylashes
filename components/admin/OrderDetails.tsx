@@ -40,6 +40,7 @@ type OrderItem = {
   unit_price_cents: number;
   line_total_cents: number;
   product_title: string | null;
+  variant_length: string | null;
   product: { title: string } | null;
 };
 
@@ -49,6 +50,7 @@ type OrderItemRow = {
   unit_price_cents: number;
   line_total_cents: number | null;
   product_title: string | null;
+  variant_length: string | null;
   product: { title: string } | { title: string }[] | null;
 };
 
@@ -81,7 +83,7 @@ const OrderDetails = ({ orderId }: OrderDetailsProps) => {
       const { data: itemsData, error: itemsError } = await supabase
         .from("order_items")
         .select(
-          "id, qty, unit_price_cents, line_total_cents, product_title, product:products(title)"
+          "id, qty, unit_price_cents, line_total_cents, product_title, variant_length, product:products(title)"
         )
         .eq("order_id", orderId);
 
@@ -101,6 +103,7 @@ const OrderDetails = ({ orderId }: OrderDetailsProps) => {
           line_total_cents:
             item.line_total_cents ?? item.unit_price_cents * item.qty,
           product_title: item.product_title,
+          variant_length: item.variant_length,
           product: Array.isArray(item.product)
             ? item.product[0] ?? null
             : item.product,
@@ -235,6 +238,7 @@ const OrderDetails = ({ orderId }: OrderDetailsProps) => {
                     </p>
                     <p className="text-xs text-muted">
                       Qty {item.qty} x {formatEur(item.unit_price_cents)}
+                      {item.variant_length ? ` · Length ${item.variant_length}` : ""}
                     </p>
                   </div>
                   <p className="text-sm text-ink">
